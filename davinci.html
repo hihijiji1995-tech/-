@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Melody Code - The Secret Map</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700;900&display=swap');
+        
+        body {
+            font-family: 'Noto Serif KR', 'Georgia', serif;
+            background-color: #e6dabb;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.12'/%3E%3C/svg%3E");
+            color: #2e1e0f;
+            margin: 0;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        /* Subtle Map Folds Effect */
+        .map-folds {
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(to right, transparent 24%, rgba(46,30,15,0.05) 25%, transparent 26%, transparent 74%, rgba(46,30,15,0.05) 75%, transparent 76%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .map-guidelines {
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(to right, rgba(46,30,15,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(46,30,15,0.05) 1px, transparent 1px);
+            background-size: 4rem 4rem;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .ink-border { border: 2px solid #2e1e0f; }
+        .dashed-ink-border { border: 2px dashed #5c4033; }
+        
+        /* Custom scrollbar for rankings */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #5c4033; border-radius: 3px; }
+    </style>
+</head>
+<body class="relative flex flex-col items-center min-h-screen p-4">
+    <div class="map-folds" id="bg-folds"></div>
+    <div class="map-guidelines hidden" id="bg-guidelines"></div>
+
+    <!-- LOBBY SCREEN -->
+    <div id="lobby-screen" class="relative z-10 p-10 max-w-md w-full bg-[#eedfc1] ink-border shadow-[5px_5px_0px_rgba(46,30,15,0.2)] my-auto transition-opacity duration-500">
+        <div class="text-center mb-10 border-b-2 border-[#2e1e0f] pb-6 relative">
+            <div class="absolute -top-4 left-1/2 -translate-x-1/2 w-8 h-8 bg-[#eedfc1] border-2 border-[#2e1e0f] rounded-full flex items-center justify-center">
+                <span class="block w-4 h-4 bg-[#2e1e0f] rounded-full"></span>
+            </div>
+            <h1 class="text-4xl font-black tracking-wider uppercase mb-2 mt-4 text-[#2e1e0f]" style="font-family: 'Georgia', serif;">
+                Melody Code
+            </h1>
+            <h2 class="text-lg tracking-[0.2em] italic text-[#5c4033]">The Secret Map</h2>
+            <p class="mt-4 text-sm font-bold tracking-wide text-[#730f0f]">나는 나쁜 짓을 꾸미고 있음을 엄숙히 선서합니다</p>
+        </div>
+        
+        <div class="space-y-8">
+            <div>
+                <label class="block text-sm font-bold tracking-widest text-[#5c4033] mb-3 uppercase italic">Name of Investigator</label>
+                <input 
+                    type="text" 
+                    id="nickname-input"
+                    class="w-full bg-transparent border-b-2 border-[#2e1e0f] px-4 py-2 focus:outline-none focus:border-[#730f0f] text-[#2e1e0f] placeholder-[#8a7256] font-bold text-lg transition-colors text-center"
+                    placeholder="이름을 서명하시오..."
+                    oninput="checkNickname()"
+                />
+            </div>
+            
+            <div>
+                <label class="block text-sm font-bold tracking-widest text-[#5c4033] mb-3 uppercase italic">Select Magical Cipher</label>
+                <div class="space-y-3" id="mode-buttons">
+                    <!-- Buttons injected via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PLAYING SCREEN -->
+    <div id="game-screen" class="hidden relative z-10 w-full max-w-5xl flex flex-col items-center flex-1 py-6 opacity-0 transition-opacity duration-500">
+        
+        <!-- Header Info -->
+        <div class="w-full flex flex-wrap justify-between items-center mb-8 p-4 ink-border bg-[#eedfc1] shadow-[4px_4px_0px_rgba(46,30,15,0.1)]">
+            <div class="flex items-center gap-4 md:gap-6">
+                <div>
+                    <span class="text-[#5c4033] text-[10px] md:text-xs tracking-widest uppercase block mb-1 italic font-bold">Investigator</span>
+                    <span id="display-nickname" class="font-black text-sm md:text-lg"></span>
+                </div>
+                <div class="border-l-2 border-[#2e1e0f] pl-4 md:pl-6">
+                    <span class="text-[#5c4033] text-[10px] md:text-xs tracking-widest uppercase block mb-1 italic font-bold">Cipher</span>
+                    <span id="display-mode" class="font-black text-[#730f0f] text-sm md:text-base"></span>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-4 md:gap-8 mt-4 md:mt-0">
+                <div class="text-right">
+                    <span class="text-[#5c4033] text-[10px] md:text-xs tracking-widest uppercase block mb-1 italic font-bold">Score</span>
+                    <span id="display-score" class="font-black text-lg md:text-xl">10000</span>
+                </div>
+                <div class="text-right border-l-2 border-[#2e1e0f] pl-4 md:pl-8">
+                    <span class="text-[#5c4033] text-[10px] md:text-xs tracking-widest uppercase block mb-1 italic font-bold">Time</span>
+                    <span id="display-timer" class="font-black text-lg md:text-xl">0s</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <div id="status-bar" class="w-full p-4 mb-10 text-center font-bold text-sm md:text-md tracking-widest transition-colors duration-500 uppercase bg-[#2e1e0f] text-[#eedfc1] border-2 border-[#2e1e0f]">
+            코드 해독을 시작합니다. 상대방의 비밀을 파헤치십시오.
+        </div>
+
+        <!-- AI Hand Area -->
+        <div class="w-full mb-12 flex flex-col items-center">
+            <h3 class="text-[#5c4033] font-bold mb-4 tracking-[0.2em] text-xs md:text-sm uppercase italic">Opponent's Footprints</h3>
+            <div id="ai-hand-container" class="flex flex-wrap justify-center gap-2 md:gap-4">
+                <!-- AI Cards injected here -->
+            </div>
+        </div>
+
+        <!-- Player Hand Area -->
+        <div class="w-full mb-12 flex flex-col items-center">
+            <h3 class="text-[#5c4033] font-bold mb-4 tracking-[0.2em] text-xs md:text-sm uppercase italic">Your Footprints</h3>
+            <div id="player-hand-container" class="flex flex-wrap justify-center gap-2 md:gap-4">
+                <!-- Player Cards injected here -->
+            </div>
+        </div>
+
+        <!-- Control Panel / Guessing Interface -->
+        <div class="w-full max-w-3xl mt-auto relative h-auto md:h-48">
+            
+            <!-- Action Modal Overlay -->
+            <div id="action-modal" class="hidden absolute inset-0 bg-[#eaddc5]/95 backdrop-blur-md flex items-center justify-center z-20 border-2 border-[#2e1e0f] shadow-[5px_5px_0px_rgba(46,30,15,0.3)]">
+                <div class="text-center w-full px-4 md:px-8">
+                    <h4 class="text-base md:text-xl font-black mb-6 md:mb-8 text-[#2e1e0f] tracking-widest uppercase">발자취 확인 완료. 다음 행동을 선택하시오.</h4>
+                    <div class="flex flex-col md:flex-row gap-4 justify-center">
+                        <button onclick="window.game.continueGuessing()" class="px-6 py-3 bg-transparent border-2 border-[#2e1e0f] hover:bg-[#2e1e0f] hover:text-[#eedfc1] text-[#2e1e0f] font-bold text-xs md:text-sm transition-all tracking-widest uppercase">
+                            계속 추적 (Continue)
+                        </button>
+                        <button onclick="window.game.passTurn()" class="px-6 py-3 bg-transparent border-2 border-[#730f0f] hover:bg-[#730f0f] hover:text-[#eedfc1] text-[#730f0f] font-bold text-xs md:text-sm transition-all tracking-widest uppercase">
+                            은신하기 (Pass)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Guessing Keys -->
+            <div id="guessing-keys" class="grid grid-cols-4 md:grid-cols-8 gap-2 transition-opacity duration-500 h-full opacity-30 pointer-events-none grayscale">
+                <!-- Keys injected via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- GAME OVER SCREEN -->
+    <div id="game-over-screen" class="hidden relative z-10 p-10 max-w-lg w-full text-center bg-[#eedfc1] ink-border shadow-[5px_5px_0px_rgba(46,30,15,0.2)] my-auto opacity-0 transition-opacity duration-500">
+        <h1 id="go-title" class="text-3xl md:text-4xl font-black mb-2 tracking-widest uppercase text-[#2e1e0f]">
+            Mischief Managed
+        </h1>
+        <p id="go-subtitle" class="text-base md:text-lg italic text-[#5c4033] mb-8 font-bold">
+            모든 비밀 코드를 해독했습니다.
+        </p>
+        
+        <div class="p-6 mb-8 dashed-ink-border bg-[#e6dabb]">
+            <h2 class="text-xs md:text-sm font-bold mb-4 text-[#5c4033] tracking-widest uppercase italic">Final Assessment</h2>
+            <div id="go-score" class="text-4xl md:text-5xl font-black text-[#2e1e0f] mb-2">0</div>
+            <div id="go-time" class="text-xs md:text-sm font-bold text-[#730f0f]">소요 시간: 0초</div>
+        </div>
+
+        <!-- Ranking Board -->
+        <div id="ranking-board" class="mb-8 text-left hidden">
+            <h3 class="text-xs md:text-sm font-bold mb-4 text-[#2e1e0f] tracking-widest uppercase border-b-2 border-[#2e1e0f] pb-2 text-center">Master Record</h3>
+            <div id="ranking-list" class="space-y-2">
+                <!-- Rankings injected here -->
+            </div>
+        </div>
+        
+        <button 
+            onclick="window.game.goToLobby()"
+            class="w-full bg-transparent ink-border hover:bg-[#2e1e0f] hover:text-[#eedfc1] text-[#2e1e0f] font-bold py-4 transition-all duration-300 tracking-widest uppercase text-xs md:text-sm"
+        >
+            Close the Map
+        </button>
+    </div>
+
+    <script>
+        // --- Constants & Data ---
+        const MODES = {
+            Italian: {
+                name: '이태리어 (Italian)',
+                notes: ['도', '레', '미', '파', '솔', '라', '시'],
+                joker: '조커'
+            },
+            Korean: {
+                name: '우리나라 (Korean)',
+                notes: ['다', '라', '마', '바', '사', '가', '나'],
+                joker: '조커'
+            },
+            English: {
+                name: '영어 (English)',
+                notes: ['C', 'D', 'E', 'F', 'G', 'A', 'B'],
+                joker: 'Joker'
+            }
+        };
+
+        const FREQUENCIES = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88];
+        const ALL_VALUES = [0, 1, 2, 3, 4, 5, 6, 'J'];
+
+        // --- Global State ---
+        const state = {
+            gameState: 'Lobby',
+            nickname: '',
+            mode: 'Italian',
+            playerHand: [],
+            aiHand: [],
+            turn: 'Player',
+            score: 10000,
+            timer: 0,
+            winner: null,
+            statusMessage: '',
+            rankings: [],
+            selectedAiCardIndex: null,
+            showActionModal: false,
+            timerInterval: null,
+            aiTimeout: null
+        };
+
+        // --- Audio Setup (Web Audio API) ---
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playTone(index) {
+            if (!audioCtx) return;
+            
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            if (index === 'J') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.3);
+            } else {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(FREQUENCIES[index], audioCtx.currentTime);
+            }
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc.start();
+            gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+            osc.stop(audioCtx.currentTime + 0.5);
+        }
+
+        // --- Helper Functions ---
+        function getCardLabel(value) {
+            if (value === 'J') return MODES[state.mode].joker;
+            return MODES[state.mode].notes[value];
+        }
+
+        function switchScreen(targetScreen) {
+            ['lobby-screen', 'game-screen', 'game-over-screen'].forEach(id => {
+                const el = document.getElementById(id);
+                if (id === targetScreen) {
+                    el.classList.remove('hidden');
+                    // Small delay to trigger transition
+                    setTimeout(() => el.classList.remove('opacity-0'), 50);
+                } else {
+                    el.classList.add('hidden', 'opacity-0');
+                }
+            });
+
+            // Toggle background styles based on screen
+            if (targetScreen === 'game-screen') {
+                document.getElementById('bg-folds').classList.add('hidden');
+                document.getElementById('bg-guidelines').classList.remove('hidden');
+            } else {
+                document.getElementById('bg-folds').classList.remove('hidden');
+                document.getElementById('bg-guidelines').classList.add('hidden');
+            }
+        }
+
+        function updateHeader() {
+            document.getElementById('display-nickname').innerText = state.nickname;
+            document.getElementById('display-mode').innerText = MODES[state.mode].name;
+            document.getElementById('display-score').innerText = state.score.toLocaleString();
+            document.getElementById('display-timer').innerText = state.timer + 's';
+        }
+
+        function updateStatusBar(msg, isAiTurn = false) {
+            const bar = document.getElementById('status-bar');
+            bar.innerText = msg;
+            if (isAiTurn) {
+                bar.className = "w-full p-4 mb-10 text-center font-bold text-sm md:text-md tracking-widest transition-colors duration-500 uppercase bg-[#730f0f] text-[#eedfc1] border-2 border-[#730f0f]";
+            } else {
+                bar.className = "w-full p-4 mb-10 text-center font-bold text-sm md:text-md tracking-widest transition-colors duration-500 uppercase bg-[#2e1e0f] text-[#eedfc1] border-2 border-[#2e1e0f]";
+            }
+        }
+
+        function renderHands() {
+            // Render AI Hand
+            const aiContainer = document.getElementById('ai-hand-container');
+            aiContainer.innerHTML = state.aiHand.map((card, idx) => {
+                const isSelected = state.selectedAiCardIndex === idx;
+                const isSelectable = state.turn === 'Player' && !card.revealed && !state.showActionModal;
+                
+                let baseClasses = `relative w-12 h-16 md:w-20 md:h-28 flex items-center justify-center text-xl md:text-3xl font-black transition-all duration-300 border-2 `;
+                
+                // Colors
+                if (card.color === 'black') baseClasses += 'bg-[#111111] text-[#ffffff] ';
+                else baseClasses += 'bg-[#ffffff] text-[#111111] ';
+                
+                // Selection & Revealed state
+                if (isSelected) baseClasses += 'border-[#730f0f] shadow-[0_0_15px_rgba(115,15,15,0.4)] transform -translate-y-4 ';
+                else baseClasses += 'border-[#2e1e0f] ';
+                
+                if (card.revealed) baseClasses += 'opacity-80 border-dashed border-[#730f0f] ';
+                else baseClasses += 'shadow-[3px_3px_0px_rgba(46,30,15,0.3)] ';
+                
+                if (isSelectable) baseClasses += 'cursor-pointer hover:-translate-y-2 hover:shadow-[5px_5px_0px_rgba(46,30,15,0.4)] ';
+                else baseClasses += 'cursor-default ';
+
+                const noiseOverlay = !card.revealed ? `<div class="absolute inset-0 opacity-20 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cGF0aCBkPSJNMCAwTDQgNFpNIDAgNEw0IDBaIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMSIvPgo8L3N2Zz4=')]"></div>` : '';
+                const textClass = card.revealed ? 'text-[#730f0f]' : '';
+                const textContent = card.revealed ? getCardLabel(card.value) : '?';
+                const dot = !card.revealed ? `<div class="absolute bottom-1 right-1 w-1 h-1 md:bottom-1.5 md:right-1.5 md:w-1.5 md:h-1.5 rounded-full bg-current opacity-50"></div>` : '';
+
+                return `
+                    <div onclick="window.game.selectAiCard(${idx}, ${isSelectable})" class="${baseClasses}">
+                        ${noiseOverlay}
+                        <span class="relative z-10 ${textClass}">${textContent}</span>
+                        ${dot}
+                    </div>
+                `;
+            }).join('');
+
+            // Render Player Hand
+            const playerContainer = document.getElementById('player-hand-container');
+            playerContainer.innerHTML = state.playerHand.map((card) => {
+                let baseClasses = `relative w-14 h-20 md:w-24 md:h-36 flex items-center justify-center text-2xl md:text-5xl font-black transition-all duration-500 border-2 `;
+                
+                if (card.color === 'black') baseClasses += 'bg-[#111111] text-[#ffffff] ';
+                else baseClasses += 'bg-[#ffffff] text-[#111111] ';
+
+                if (card.revealed) baseClasses += 'border-[#730f0f] border-dashed opacity-80 transform translate-y-2 ';
+                else baseClasses += 'border-[#2e1e0f] shadow-[4px_4px_0px_rgba(46,30,15,0.4)] ';
+
+                const textClass = card.revealed ? 'text-[#730f0f]' : '';
+                const overlay = card.revealed ? `<div class="absolute inset-0 bg-[#730f0f] opacity-10 pointer-events-none"></div>` : '';
+
+                return `
+                    <div class="${baseClasses}">
+                        <span class="relative z-10 ${textClass}">${getCardLabel(card.value)}</span>
+                        ${overlay}
+                    </div>
+                `;
+            }).join('');
+
+            // Update Guessing Keys UI
+            const keysContainer = document.getElementById('guessing-keys');
+            const isActive = state.selectedAiCardIndex !== null && state.turn === 'Player' && !state.showActionModal;
+            
+            if (isActive) {
+                keysContainer.classList.remove('opacity-30', 'pointer-events-none', 'grayscale');
+                keysContainer.classList.add('opacity-100');
+            } else {
+                keysContainer.classList.add('opacity-30', 'pointer-events-none', 'grayscale');
+                keysContainer.classList.remove('opacity-100');
+            }
+        }
+
+        window.game = {
+            start: function(modeKey) {
+                initAudio();
+                state.mode = modeKey;
+                state.nickname = document.getElementById('nickname-input').value.trim();
+                if (!state.nickname) return;
+
+                // Generate Deck
+                let newDeck = [];
+                ['black', 'white'].forEach(color => {
+                    for (let i = 0; i < 7; i++) {
+                        newDeck.push({ id: `${color}-${i}`, color, value: i, sortValue: i, revealed: false });
+                    }
+                    newDeck.push({
+                        id: `${color}-J`, color, value: 'J',
+                        sortValue: Math.random() * 7 - 0.5,
+                        revealed: false
+                    });
+                });
+
+                // Shuffle & Deal
+                newDeck.sort(() => Math.random() - 0.5);
+                
+                const sortHand = (hand) => {
+                    return [...hand].sort((a, b) => {
+                        if (a.sortValue === b.sortValue) return a.color === 'black' ? -1 : 1;
+                        return a.sortValue - b.sortValue;
+                    });
+                };
+
+                state.playerHand = sortHand(newDeck.slice(0, 8));
+                state.aiHand = sortHand(newDeck.slice(8, 16));
+                
+                // Reset State
+                state.turn = 'Player';
+                state.score = 10000;
+                state.timer = 0;
+                state.gameState = 'Playing';
+                state.selectedAiCardIndex = null;
+                state.showActionModal = false;
+
+                // Setup UI
+                document.getElementById('action-modal').classList.add('hidden');
+                
+                // Render Keys once based on mode
+                const keysContainer = document.getElementById('guessing-keys');
+                keysContainer.innerHTML = ALL_VALUES.map(val => `
+                    <button onclick="window.game.makeGuess('${val}')" class="bg-[#eedfc1] hover:bg-[#2e1e0f] hover:text-[#eedfc1] text-[#2e1e0f] border-2 border-[#2e1e0f] shadow-[2px_2px_0px_rgba(46,30,15,0.3)] flex flex-col items-center justify-center transition-all duration-200 active:translate-y-1 active:shadow-none font-black text-lg md:text-2xl py-3 md:py-0">
+                        ${getCardLabel(val)}
+                    </button>
+                `).join('');
+
+                switchScreen('game-screen');
+                updateHeader();
+                updateStatusBar('당신의 차례입니다. 해독할 상대의 코드를 선택하십시오.');
+                renderHands();
+
+                // Timer
+                clearInterval(state.timerInterval);
+                state.timerInterval = setInterval(() => {
+                    if (state.gameState === 'Playing') {
+                        state.timer++;
+                        state.score = Math.max(0, state.score - 5);
+                        updateHeader();
+                    }
+                }, 1000);
+            },
+
+            selectAiCard: function(idx, isSelectable) {
+                if (!isSelectable) return;
+                state.selectedAiCardIndex = idx;
+                renderHands();
+            },
+
+            makeGuess: function(valStr) {
+                if (state.selectedAiCardIndex === null || state.turn !== 'Player') return;
+                
+                let guessedValue = valStr === 'J' ? 'J' : parseInt(valStr);
+                playTone(guessedValue);
+                
+                const targetCard = state.aiHand[state.selectedAiCardIndex];
+                
+                if (targetCard.value === guessedValue) {
+                    // Correct
+                    state.score += 500;
+                    state.aiHand[state.selectedAiCardIndex].revealed = true;
+                    state.selectedAiCardIndex = null;
+                    
+                    if (state.aiHand.every(card => card.revealed)) {
+                        this.endGame('Player');
+                    } else {
+                        updateStatusBar('정확합니다. 계속 해독하시겠습니까?');
+                        state.showActionModal = true;
+                        document.getElementById('action-modal').classList.remove('hidden');
+                        renderHands();
+                    }
+                } else {
+                    // Wrong
+                    state.score -= 300;
+                    updateStatusBar('해독 실패. 당신의 비밀이 하나 폭로됩니다.', true);
+                    state.selectedAiCardIndex = null;
+                    
+                    // Penalty
+                    const hiddenIndices = state.playerHand.map((c, i) => (!c.revealed ? i : null)).filter(i => i !== null);
+                    if (hiddenIndices.length > 0) {
+                        const randomIdx = hiddenIndices[Math.floor(Math.random() * hiddenIndices.length)];
+                        state.playerHand[randomIdx].revealed = true;
+                        
+                        if (state.playerHand.every(card => card.revealed)) {
+                            renderHands();
+                            setTimeout(() => this.endGame('AI'), 1000);
+                            return;
+                        }
+                    }
+                    
+                    renderHands();
+                    updateHeader();
+                    
+                    setTimeout(() => this.startAiTurn(), 1500);
+                }
+            },
+
+            continueGuessing: function() {
+                state.showActionModal = false;
+                document.getElementById('action-modal').classList.add('hidden');
+                updateStatusBar('당신의 차례입니다. 해독할 상대의 코드를 선택하십시오.');
+                renderHands();
+                updateHeader();
+            },
+
+            passTurn: function() {
+                state.showActionModal = false;
+                document.getElementById('action-modal').classList.add('hidden');
+                this.startAiTurn();
+            },
+
+            startAiTurn: function() {
+                state.turn = 'AI';
+                updateStatusBar('상대가 코드를 추론 중입니다...', true);
+                renderHands();
+                
+                clearTimeout(state.aiTimeout);
+                state.aiTimeout = setTimeout(() => this.performAiAction(), 2000);
+            },
+
+            performAiAction: function() {
+                if (state.gameState !== 'Playing') return;
+
+                const hiddenPlayerCards = state.playerHand.map((card, index) => ({ card, index })).filter(item => !item.card.revealed);
+                if (hiddenPlayerCards.length === 0) return;
+
+                const target = hiddenPlayerCards[Math.floor(Math.random() * hiddenPlayerCards.length)];
+                const targetColor = target.card.color;
+
+                const aiKnown = state.aiHand.filter(c => c.color === targetColor).map(c => c.value);
+                const playerRevealed = state.playerHand.filter(c => c.revealed && c.color === targetColor).map(c => c.value);
+                
+                const knownValues = new Set([...aiKnown, ...playerRevealed]);
+                const validGuesses = ALL_VALUES.filter(val => !knownValues.has(val));
+                
+                const guess = validGuesses.length > 0 
+                    ? validGuesses[Math.floor(Math.random() * validGuesses.length)] 
+                    : ALL_VALUES[Math.floor(Math.random() * ALL_VALUES.length)];
+
+                if (guess === target.card.value) {
+                    // AI Correct
+                    updateStatusBar(`상대가 정답을 맞췄습니다. (${getCardLabel(guess)})`, true);
+                    state.playerHand[target.index].revealed = true;
+                    
+                    if (state.playerHand.every(card => card.revealed)) {
+                        renderHands();
+                        setTimeout(() => this.endGame('AI'), 1000);
+                    } else {
+                        renderHands();
+                        setTimeout(() => {
+                            if (Math.random() > 0.5) {
+                                this.startAiTurn();
+                            } else {
+                                state.turn = 'Player';
+                                updateStatusBar('상대가 턴을 마쳤습니다. 당신의 차례입니다.');
+                                renderHands();
+                            }
+                        }, 1500);
+                    }
+                } else {
+                    // AI Wrong
+                    updateStatusBar('상대의 추론이 틀렸습니다. 상대의 비밀이 하나 폭로됩니다.');
+                    
+                    const hiddenAiIndices = state.aiHand.map((c, i) => (!c.revealed ? i : null)).filter(i => i !== null);
+                    if (hiddenAiIndices.length > 0) {
+                        const randomIdx = hiddenAiIndices[Math.floor(Math.random() * hiddenAiIndices.length)];
+                        state.aiHand[randomIdx].revealed = true;
+                        
+                        if (state.aiHand.every(card => card.revealed)) {
+                            renderHands();
+                            setTimeout(() => this.endGame('Player'), 1000);
+                            return;
+                        }
+                    }
+                    
+                    renderHands();
+                    setTimeout(() => {
+                        state.turn = 'Player';
+                        updateStatusBar('당신의 차례입니다. 해독할 상대의 코드를 선택하십시오.');
+                        renderHands();
+                    }, 2000);
+                }
+            },
+
+            endGame: function(winner) {
+                state.gameState = 'GameOver';
+                clearInterval(state.timerInterval);
+                
+                if (winner === 'Player') {
+                    state.rankings.push({ name: state.nickname, score: state.score, time: state.timer });
+                    state.rankings.sort((a, b) => b.score - a.score);
+                    if (state.rankings.length > 5) state.rankings = state.rankings.slice(0, 5);
+                }
+
+                // Update UI
+                const title = document.getElementById('go-title');
+                const subtitle = document.getElementById('go-subtitle');
+                
+                if (winner === 'Player') {
+                    title.innerText = 'Mischief Managed';
+                    title.className = "text-3xl md:text-4xl font-black mb-2 tracking-widest uppercase text-[#2e1e0f]";
+                    subtitle.innerText = '모든 비밀 코드를 해독했습니다.';
+                } else {
+                    title.innerText = 'Secrets Revealed';
+                    title.className = "text-3xl md:text-4xl font-black mb-2 tracking-widest uppercase text-[#730f0f]";
+                    subtitle.innerText = '당신의 발자취가 모두 발각되었습니다.';
+                }
+
+                document.getElementById('go-score').innerText = state.score.toLocaleString();
+                document.getElementById('go-time').innerText = `소요 시간: ${state.timer}초`;
+
+                // Render Rankings
+                const rankingBoard = document.getElementById('ranking-board');
+                const rankingList = document.getElementById('ranking-list');
+                
+                if (state.rankings.length > 0) {
+                    rankingBoard.classList.remove('hidden');
+                    rankingList.innerHTML = state.rankings.map((rank, idx) => `
+                        <div class="flex justify-between items-center text-sm md:text-md font-bold border-b border-dashed border-[#8a7256] pb-1">
+                            <span class="text-[#730f0f] w-6 italic">${idx + 1}.</span>
+                            <span class="flex-1 text-[#2e1e0f] truncate pr-2">${rank.name}</span>
+                            <span class="text-[#5c4033] w-24 text-right">${rank.score.toLocaleString()} pt</span>
+                        </div>
+                    `).join('');
+                } else {
+                    rankingBoard.classList.add('hidden');
+                }
+
+                switchScreen('game-over-screen');
+            },
+
+            goToLobby: function() {
+                state.gameState = 'Lobby';
+                switchScreen('lobby-screen');
+            }
+        };
+
+        function checkNickname() {
+            const input = document.getElementById('nickname-input').value.trim();
+            const btns = document.querySelectorAll('.mode-btn');
+            btns.forEach(btn => {
+                if (input) {
+                    btn.removeAttribute('disabled');
+                    btn.classList.remove('opacity-30', 'cursor-not-allowed');
+                } else {
+                    btn.setAttribute('disabled', 'true');
+                    btn.classList.add('opacity-30', 'cursor-not-allowed');
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const modeContainer = document.getElementById('mode-buttons');
+            modeContainer.innerHTML = Object.keys(MODES).map(m => `
+                <button
+                    disabled
+                    onclick="window.game.start('${m}')"
+                    class="mode-btn opacity-30 cursor-not-allowed w-full relative group overflow-hidden bg-transparent hover:bg-[#2e1e0f] hover:text-[#eedfc1] dashed-ink-border p-4 transition-all duration-300"
+                >
+                    <div class="relative z-10 flex justify-between items-center">
+                        <span class="font-bold tracking-widest text-sm md:text-base">${MODES[m].name}</span>
+                        <span class="text-xs font-serif tracking-widest opacity-80">${MODES[m].notes.join(' ')}</span>
+                    </div>
+                </button>
+            `).join('');
+        });
+
+    </script>
+</body>
+</html>
